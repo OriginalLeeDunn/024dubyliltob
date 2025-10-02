@@ -1,0 +1,103 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'Dockerfile'
+      - '**/*.py'
+      - 'requirements.txt'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to Kubernetes after build/push'
+        required: false
+        default: 'false'
+
+jobs:
+  build-and-push:
+    name: Build and push image to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: build-and-push
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Configure KUBECONFIG
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${KUBECONFIG_B64}" | base64 -d > $HOME/.kube/config
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+
+      - name: Create/Update secret with bot credentials
+        run: |
+          kubectl -n lilybud420 create secret generic lilybud420-secrets \
+            --from-literal=HIGHRISE_BOT_TOKEN="$HIGHRISE_BOT_TOKEN" \
+            --from-literal=HIGHRISE_ROOM_ID="$HIGHRISE_ROOM_ID" \
+            --from-literal=HIGHRISE_API_KEY="$HIGHRISE_API_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        env:
+          HIGHRISE_BOT_TOKEN: ${{ secrets.HIGHRISE_BOT_TOKEN }}
+          HIGHRISE_ROOM_ID: ${{ secrets.HIGHRISE_ROOM_ID }}
+          HIGHRISE_API_KEY: ${{ secrets.HIGHRISE_API_KEY }}
+
+      - name: Apply manifests
+        run: |
+          # Update image tag via kubectl set image for simplicity (Deployment uses :latest by default)
+          kubectl -n lilybud420 apply -f k8s/deployment.yaml
+          kubectl -n lilybud420 rollout status deploy/lilybud420-bot --timeout=120s

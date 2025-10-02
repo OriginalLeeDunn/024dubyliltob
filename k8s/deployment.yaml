@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lilybud420-bot
+  namespace: lilybud420
+  labels:
+    app: lilybud420-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lilybud420-bot
+  template:
+    metadata:
+      labels:
+        app: lilybud420-bot
+    spec:
+      containers:
+        - name: bot
+          image: ghcr.io/originalreedunn/024dubyliltob:latest
+          imagePullPolicy: Always
+          env:
+            - name: HIGHRISE_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: lilybud420-secrets
+                  key: HIGHRISE_BOT_TOKEN
+            - name: HIGHRISE_ROOM_ID
+              valueFrom:
+                secretKeyRef:
+                  name: lilybud420-secrets
+                  key: HIGHRISE_ROOM_ID
+            - name: HIGHRISE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lilybud420-secrets
+                  key: HIGHRISE_API_KEY
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 15

@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  lilybud420-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lilybud420-bot
+    restart: unless-stopped
+    environment:
+      - HIGHRISE_BOT_TOKEN=${HIGHRISE_BOT_TOKEN}
+      - HIGHRISE_ROOM_ID=${HIGHRISE_ROOM_ID}
+      - HIGHRISE_API_KEY=${HIGHRISE_API_KEY}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Mount source code for development (so changes are reflected immediately)
+      - .:/app
+      # Persist bot data (teleport points, etc.)
+      - ./data:/app/data
+      # Persist logs
+      - ./logs:/app/logs
+      # Mount music files
+      - ./mp3:/app/mp3:ro
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Add a monitoring service
+  watchtower:
+    image: containrrr/watchtower
+    container_name: lilybud420-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600
+      - WATCHTOWER_INCLUDE_STOPPED=true
+    networks:
+      - bot-network
+    profiles:
+      - monitoring
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  bot-data:
+  bot-logs:

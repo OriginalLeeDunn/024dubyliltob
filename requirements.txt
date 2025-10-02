@@ -1,0 +1,5 @@
+highrise-bot-sdk>=23.1.0
+pydub>=0.25.1
+aiofiles>=23.1.0
+python-dotenv>=1.0.0
+playsound>=1.3.0
