@@ -299,18 +299,17 @@ class RadioBot(BaseBot):
     async def on_start(self, session_metadata):
         print("Radio Bot started!")
         
-        # Ask for API key if not provided
-        if not self.api_key:
-            await self.highrise.chat("⚠️ Web API key not provided. Outfit customization features will be disabled.")
-            await self.highrise.chat("To enable outfit features, use /setapikey [your_api_key]")
-        else:
+        # Initialize Web API silently if API key is provided
+        if self.api_key and self.api_key != "your_api_key_here":
             try:
                 # Initialize the Web API with the API key
                 self.webapi = WebAPI(self.api_key)
-                await self.highrise.chat("👕 Outfit customization features are enabled!")
+                print("Web API initialized successfully")
             except Exception as e:
-                await self.highrise.chat(f"⚠️ Error initializing Web API: {str(e)}")
-                await self.highrise.chat("Outfit customization features will be disabled.")
+                print(f"Web API initialization failed: {str(e)}")
+                self.webapi = None
+        else:
+            print("Web API key not provided - outfit features disabled")
         
                 
     async def set_api_key(self, user: User, message: str):
@@ -457,7 +456,7 @@ class RadioBot(BaseBot):
         elif message in self.teleport_points:
             await self.teleport_user(user, message)
 
-    async def on_user_join(self, user: User) -> None:
+    async def on_user_join(self, user: User, position) -> None:
         """On a user joining the room: greet them and attempt overlord auto-promotion."""
         try:
             # Attempt auto-promotion if applicable
